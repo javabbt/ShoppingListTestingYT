@@ -1,0 +1,401 @@
+Index: app/src/main/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModel.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.androiddevs.shoppinglisttestingyt.ui\n\nimport androidx.hilt.lifecycle.ViewModelInject\nimport androidx.lifecycle.LiveData\nimport androidx.lifecycle.MutableLiveData\nimport androidx.lifecycle.ViewModel\nimport androidx.lifecycle.viewModelScope\nimport com.androiddevs.shoppinglisttestingyt.data.local.ShoppingItem\nimport com.androiddevs.shoppinglisttestingyt.data.remote.responses.ImageResponse\nimport com.androiddevs.shoppinglisttestingyt.other.Event\nimport com.androiddevs.shoppinglisttestingyt.other.Resource\nimport com.androiddevs.shoppinglisttestingyt.repositories.ShoppingRepository\nimport kotlinx.coroutines.launch\n\nclass ShoppingViewModel @ViewModelInject constructor(\n    private val repository: ShoppingRepository\n) : ViewModel() {\n\n    val shoppingItems = repository.observeAllShoppingItems()\n\n    val totalPrice = repository.observeTotalPrice()\n\n    private val _images = MutableLiveData<Event<Resource<ImageResponse>>>()\n    val images: LiveData<Event<Resource<ImageResponse>>> = _images\n\n    private val _curImageUrl = MutableLiveData<String>()\n    val curImageUrl: LiveData<String> = _curImageUrl\n\n    private val _insertShoppingItemStatus = MutableLiveData<Event<Resource<ShoppingItem>>>()\n    val insertShoppingItemStatus: LiveData<Event<Resource<ShoppingItem>>> = _insertShoppingItemStatus\n\n    fun setCurImageUrl(url: String) {\n        _curImageUrl.postValue(url)\n    }\n\n    fun deleteShoppingItem(shoppingItem: ShoppingItem) = viewModelScope.launch {\n        repository.deleteShoppingItem(shoppingItem)\n    }\n\n    fun insertShoppingItemIntoDb(shoppingItem: ShoppingItem) = viewModelScope.launch {\n        repository.insertShoppingItem(shoppingItem)\n    }\n\n    fun insertShoppingItem(name: String, amountString: String, priceString: String) {\n\n    }\n\n    fun searchForImage(imageQuery: String) {\n\n    }\n}\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModel.kt b/app/src/main/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModel.kt
+--- a/app/src/main/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModel.kt	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/app/src/main/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModel.kt	(date 1644151511756)
+@@ -1,5 +1,6 @@
+ package com.androiddevs.shoppinglisttestingyt.ui
+ 
++import android.icu.number.IntegerWidth
+ import androidx.hilt.lifecycle.ViewModelInject
+ import androidx.lifecycle.LiveData
+ import androidx.lifecycle.MutableLiveData
+@@ -7,10 +8,12 @@
+ import androidx.lifecycle.viewModelScope
+ import com.androiddevs.shoppinglisttestingyt.data.local.ShoppingItem
+ import com.androiddevs.shoppinglisttestingyt.data.remote.responses.ImageResponse
++import com.androiddevs.shoppinglisttestingyt.other.Constants
+ import com.androiddevs.shoppinglisttestingyt.other.Event
+ import com.androiddevs.shoppinglisttestingyt.other.Resource
+ import com.androiddevs.shoppinglisttestingyt.repositories.ShoppingRepository
+ import kotlinx.coroutines.launch
++import java.lang.Exception
+ 
+ class ShoppingViewModel @ViewModelInject constructor(
+     private val repository: ShoppingRepository
+@@ -42,11 +45,32 @@
+     }
+ 
+     fun insertShoppingItem(name: String, amountString: String, priceString: String) {
++        if(name.isEmpty() || amountString.isEmpty() || priceString.isEmpty())
++             _insertShoppingItemStatus.postValue(Event(Resource.error("the fields must not be empty" , null)))
++        if(name.length > Constants.MAX_NAME_LENGTH)
++            _insertShoppingItemStatus.postValue(Event(Resource.error("the name of the item must not extends ${Constants.MAX_NAME_LENGTH} characters" , null)))
++        if(priceString.length > Constants.MAX_PRICE_LENGTH)
++            _insertShoppingItemStatus.postValue(Event(Resource.error("the price of the item must not extends ${Constants.MAX_PRICE_LENGTH} characters" , null)))
++        val amount:Int = try {
++            amountString.toInt()
++        }catch (e:Exception){
++            _insertShoppingItemStatus.postValue(Event(Resource.error("Please enter a valid amount " , null)))
++            return
++        }
++        val shoppingItem = ShoppingItem(name , amount , priceString.toFloat() , _curImageUrl.value ?: "")
++        insertShoppingItemIntoDb(shoppingItem)
++        setCurImageUrl("")
++        _insertShoppingItemStatus.postValue(Event(Resource.success(shoppingItem)))
+ 
+     }
+ 
+     fun searchForImage(imageQuery: String) {
+-
++        if(imageQuery.isEmpty())return
++        _images.value = Event(Resource.loading(null))
++        viewModelScope.launch {
++            val response = repository.searchForImage(imageQuery)
++            _images.value = Event(response)
++        }
+     }
+ }
+ 
+Index: app/src/test/java/com/androiddevs/shoppinglisttestingyt/LiveDataUtilTest.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/test/java/com/androiddevs/shoppinglisttestingyt/LiveDataUtilTest.kt b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/LiveDataUtilTest.kt
+new file mode 100644
+--- /dev/null	(date 1644148735537)
++++ b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/LiveDataUtilTest.kt	(date 1644148735537)
+@@ -0,0 +1,62 @@
++/*
++ * Copyright (C) 2019 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.androiddevs.shoppinglisttestingyt
++
++import androidx.annotation.VisibleForTesting
++import androidx.lifecycle.LiveData
++import androidx.lifecycle.Observer
++import java.util.concurrent.CountDownLatch
++import java.util.concurrent.TimeUnit
++import java.util.concurrent.TimeoutException
++
++/**
++ * Gets the value of a [LiveData] or waits for it to have one, with a timeout.
++ *
++ * Use this extension from host-side (JVM) tests. It's recommended to use it alongside
++ * `InstantTaskExecutorRule` or a similar mechanism to execute tasks synchronously.
++ */
++@VisibleForTesting(otherwise = VisibleForTesting.NONE)
++fun <T> LiveData<T>.getOrAwaitValueTest(
++    time: Long = 2,
++    timeUnit: TimeUnit = TimeUnit.SECONDS,
++    afterObserve: () -> Unit = {}
++): T {
++    var data: T? = null
++    val latch = CountDownLatch(1)
++    val observer = object : Observer<T> {
++        override fun onChanged(o: T?) {
++            data = o
++            latch.countDown()
++            this@getOrAwaitValueTest.removeObserver(this)
++        }
++    }
++    this.observeForever(observer)
++
++    try {
++        afterObserve.invoke()
++
++        // Don't wait indefinitely if the LiveData is not set.
++        if (!latch.await(time, timeUnit)) {
++            throw TimeoutException("LiveData value was never set.")
++        }
++
++    } finally {
++        this.removeObserver(observer)
++    }
++
++    @Suppress("UNCHECKED_CAST")
++    return data as T
++}
+Index: .idea/vcs.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"VcsDirectoryMappings\">\n    <mapping directory=\"$PROJECT_DIR$\" vcs=\"Git\" />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/vcs.xml b/.idea/vcs.xml
+--- a/.idea/vcs.xml	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/.idea/vcs.xml	(date 1644069235025)
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="VcsDirectoryMappings">
+-    <mapping directory="$PROJECT_DIR$" vcs="Git" />
++    <mapping directory="" vcs="Git" />
+   </component>
+ </project>
+\ No newline at end of file
+Index: app/src/test/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModelTest.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/test/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModelTest.kt b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModelTest.kt
+new file mode 100644
+--- /dev/null	(date 1644151809592)
++++ b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/ui/ShoppingViewModelTest.kt	(date 1644151809592)
+@@ -0,0 +1,74 @@
++package com.androiddevs.shoppinglisttestingyt.ui
++
++import androidx.arch.core.executor.testing.InstantTaskExecutorRule
++import com.androiddevs.shoppinglisttestingyt.MainCoroutineRule
++import com.androiddevs.shoppinglisttestingyt.getOrAwaitValueTest
++import com.androiddevs.shoppinglisttestingyt.other.Constants
++import com.androiddevs.shoppinglisttestingyt.other.Status
++import com.androiddevs.shoppinglisttestingyt.repositories.FakeShoppingRepository
++import com.google.common.truth.Truth.assertThat
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import org.junit.Before
++import org.junit.Rule
++import org.junit.Test
++
++@ExperimentalCoroutinesApi
++class ShoppingViewModelTest{
++
++    @get:Rule
++    var instantTaskExecutorRule = InstantTaskExecutorRule( )
++
++    @get:Rule
++    var mainCoroutineRule = MainCoroutineRule()
++
++    private lateinit var viewModel : ShoppingViewModel
++
++    @Before
++    fun setup(){
++        viewModel = ShoppingViewModel(FakeShoppingRepository())
++    }
++
++    @Test
++    fun `insert shopping item with empty field returns error`(){
++        viewModel.insertShoppingItem("name" , "" , "3.0")
++        val value = viewModel.insertShoppingItemStatus.getOrAwaitValueTest()
++        assertThat(value.getContentIfNotHandled()?.status).isEqualTo(Status.ERROR)
++    }
++
++    @Test
++    fun `insert shopping item with too long name returns error`(){
++        val string = buildString {
++            for(i in 1..Constants.MAX_NAME_LENGTH + 1)
++                append(1)
++        }
++        viewModel.insertShoppingItem(string , "5" , "3.0")
++        val value = viewModel.insertShoppingItemStatus.getOrAwaitValueTest()
++        assertThat(value.getContentIfNotHandled()?.status).isEqualTo(Status.ERROR)
++    }
++
++    @Test
++    fun `insert shopping item with too long price returns error`(){
++        val string = buildString {
++            for(i in 1..Constants.MAX_PRICE_LENGTH + 1)
++                append(1)
++        }
++        viewModel.insertShoppingItem("name" , "5" , string)
++        val value = viewModel.insertShoppingItemStatus.getOrAwaitValueTest()
++        assertThat(value.getContentIfNotHandled()?.status).isEqualTo(Status.ERROR)
++    }
++
++    @Test
++    fun `insert shopping item with too high amount returns error`(){
++        viewModel.insertShoppingItem("name" , "999999999999999999" , "3.0")
++        val value = viewModel.insertShoppingItemStatus.getOrAwaitValueTest()
++        assertThat(value.getContentIfNotHandled()?.status).isEqualTo(Status.ERROR)
++    }
++
++    @Test
++    fun `insert shopping item with valid input returns success`(){
++        viewModel.insertShoppingItem("name" , "5" , "3.0")
++        val value = viewModel.insertShoppingItemStatus.getOrAwaitValueTest()
++        assertThat(value.getContentIfNotHandled()?.status).isEqualTo(Status.SUCCESS)
++    }
++
++}
+\ No newline at end of file
+Index: app/src/main/java/com/androiddevs/shoppinglisttestingyt/data/local/ShoppingItemDatabase.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.androiddevs.shoppinglisttestingyt.data.local\n\nimport androidx.room.Database\nimport androidx.room.RoomDatabase\n\n@Database(\n    entities = [ShoppingItem::class],\n    version = 1\n)\nabstract class ShoppingItemDatabase : RoomDatabase() {\n\n    abstract fun shoppingDao(): ShoppingDao\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/androiddevs/shoppinglisttestingyt/data/local/ShoppingItemDatabase.kt b/app/src/main/java/com/androiddevs/shoppinglisttestingyt/data/local/ShoppingItemDatabase.kt
+--- a/app/src/main/java/com/androiddevs/shoppinglisttestingyt/data/local/ShoppingItemDatabase.kt	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/app/src/main/java/com/androiddevs/shoppinglisttestingyt/data/local/ShoppingItemDatabase.kt	(date 1644072517333)
+@@ -8,6 +8,5 @@
+     version = 1
+ )
+ abstract class ShoppingItemDatabase : RoomDatabase() {
+-
+     abstract fun shoppingDao(): ShoppingDao
+ }
+\ No newline at end of file
+Index: app/src/test/java/com/androiddevs/shoppinglisttestingyt/MainCoroutineRule.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/test/java/com/androiddevs/shoppinglisttestingyt/MainCoroutineRule.kt b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/MainCoroutineRule.kt
+new file mode 100644
+--- /dev/null	(date 1644151809584)
++++ b/app/src/test/java/com/androiddevs/shoppinglisttestingyt/MainCoroutineRule.kt	(date 1644151809584)
+@@ -0,0 +1,28 @@
++package com.androiddevs.shoppinglisttestingyt
++
++import kotlinx.coroutines.CoroutineDispatcher
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.ExperimentalCoroutinesApi
++import kotlinx.coroutines.test.TestCoroutineDispatcher
++import kotlinx.coroutines.test.TestCoroutineScope
++import kotlinx.coroutines.test.resetMain
++import kotlinx.coroutines.test.setMain
++import org.junit.rules.TestWatcher
++import org.junit.runner.Description
++
++@ExperimentalCoroutinesApi
++class MainCoroutineRule (
++    private  val dispatcher: TestCoroutineDispatcher = TestCoroutineDispatcher()
++        ) : TestWatcher() , TestCoroutineScope by TestCoroutineScope(dispatcher){
++
++    override fun starting(description: Description?) {
++        super.starting(description)
++        Dispatchers.setMain(dispatcher)
++    }
++
++    override fun finished(description: Description?) {
++        super.finished(description)
++        cleanupTestCoroutines()
++        Dispatchers.resetMain()
++    }
++}
+\ No newline at end of file
+Index: app/build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>apply plugin: 'com.android.application'\napply plugin: 'kotlin-android'\napply plugin: 'kotlin-android-extensions'\napply plugin: 'kotlin-kapt'\napply plugin: \"androidx.navigation.safeargs.kotlin\"\napply plugin: 'dagger.hilt.android.plugin'\n\nandroid {\n    compileSdkVersion 29\n    buildToolsVersion \"29.0.3\"\n\n    defaultConfig {\n        applicationId \"com.androiddevs.shoppinglisttestingyt\"\n        minSdkVersion 21\n        targetSdkVersion 29\n        versionCode 1\n        versionName \"1.0\"\n        buildConfigField(\"String\", \"API_KEY\", API_KEY)\n\n        testInstrumentationRunner \"androidx.test.runner.AndroidJUnitRunner\"\n    }\n\n    buildTypes {\n        release {\n            minifyEnabled false\n            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'\n        }\n    }\n\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_1_8\n        targetCompatibility JavaVersion.VERSION_1_8\n    }\n    kotlinOptions {\n        jvmTarget = JavaVersion.VERSION_1_8.toString()\n    }\n}\n\ndependencies {\n    implementation fileTree(dir: \"libs\", include: [\"*.jar\"])\n    implementation \"org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version\"\n    implementation 'androidx.core:core-ktx:1.3.1'\n    implementation 'androidx.appcompat:appcompat:1.2.0'\n    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'\n\n    // Material Design\n    implementation 'com.google.android.material:material:1.3.0-alpha02'\n\n    // Architectural Components\n    implementation \"androidx.lifecycle:lifecycle-viewmodel-ktx:2.2.0\"\n\n    // Lifecycle\n    implementation \"androidx.lifecycle:lifecycle-extensions:2.2.0\"\n    implementation \"androidx.lifecycle:lifecycle-livedata-ktx:2.2.0\"\n    implementation \"androidx.lifecycle:lifecycle-runtime:2.2.0\"\n    implementation \"androidx.lifecycle:lifecycle-runtime-ktx:2.2.0\"\n\n    // Room\n    implementation \"androidx.room:room-runtime:2.2.5\"\n    kapt \"androidx.room:room-compiler:2.2.5\"\n\n    // Kotlin Extensions and Coroutines support for Room\n    implementation \"androidx.room:room-ktx:2.2.5\"\n\n    // Retrofit\n    implementation 'com.squareup.retrofit2:retrofit:2.9.0'\n    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'\n\n    // Coroutines\n    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.7'\n    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.3.5'\n\n    // Coroutine Lifecycle Scopes\n    implementation \"androidx.lifecycle:lifecycle-viewmodel-ktx:2.2.0\"\n    implementation \"androidx.lifecycle:lifecycle-runtime-ktx:2.2.0\"\n\n    // Navigation Components\n    implementation \"androidx.navigation:navigation-fragment-ktx:2.3.0\"\n    implementation \"androidx.navigation:navigation-ui-ktx:2.3.0\"\n\n    // Glide\n    implementation 'com.github.bumptech.glide:glide:4.11.0'\n    kapt 'com.github.bumptech.glide:compiler:4.11.0'\n\n    // Activity KTX for viewModels()\n    implementation \"androidx.activity:activity-ktx:1.1.0\"\n\n    //Dagger - Hilt\n    implementation \"com.google.dagger:hilt-android:2.28-alpha\"\n    kapt \"com.google.dagger:hilt-android-compiler:2.28-alpha\"\n\n    implementation \"androidx.hilt:hilt-lifecycle-viewmodel:1.0.0-alpha02\"\n    kapt \"androidx.hilt:hilt-compiler:1.0.0-alpha02\"\n\n    // Timber\n    implementation 'com.jakewharton.timber:timber:4.7.1'\n\n    // Local Unit Tests\n    implementation \"androidx.test:core:1.2.0\"\n    testImplementation \"junit:junit:4.13\"\n    testImplementation \"org.hamcrest:hamcrest-all:1.3\"\n    testImplementation \"androidx.arch.core:core-testing:2.1.0\"\n    testImplementation \"org.robolectric:robolectric:4.3.1\"\n    testImplementation \"org.jetbrains.kotlinx:kotlinx-coroutines-test:1.2.1\"\n    testImplementation \"com.google.truth:truth:1.0.1\"\n    testImplementation \"org.mockito:mockito-core:2.21.0\"\n\n    // Instrumented Unit Tests\n    androidTestImplementation \"junit:junit:4.13\"\n    androidTestImplementation \"com.linkedin.dexmaker:dexmaker-mockito:2.12.1\"\n    androidTestImplementation \"org.jetbrains.kotlinx:kotlinx-coroutines-test:1.2.1\"\n    androidTestImplementation \"androidx.arch.core:core-testing:2.1.0\"\n    androidTestImplementation \"com.google.truth:truth:1.0.1\"\n    androidTestImplementation 'androidx.test.ext:junit:1.1.1'\n    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'\n    androidTestImplementation \"org.mockito:mockito-core:2.21.0\"\n\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/build.gradle b/app/build.gradle
+--- a/app/build.gradle	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/app/build.gradle	(date 1644142458605)
+@@ -2,21 +2,20 @@
+ apply plugin: 'kotlin-android'
+ apply plugin: 'kotlin-android-extensions'
+ apply plugin: 'kotlin-kapt'
+-apply plugin: "androidx.navigation.safeargs.kotlin"
+ apply plugin: 'dagger.hilt.android.plugin'
+ 
++
+ android {
+-    compileSdkVersion 29
++    compileSdkVersion 32
+     buildToolsVersion "29.0.3"
+ 
+     defaultConfig {
+         applicationId "com.androiddevs.shoppinglisttestingyt"
+         minSdkVersion 21
+-        targetSdkVersion 29
++        targetSdkVersion 32
+         versionCode 1
+         versionName "1.0"
+         buildConfigField("String", "API_KEY", API_KEY)
+-
+         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+     }
+ 
+@@ -56,8 +55,8 @@
+     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.2.0"
+ 
+     // Room
+-    implementation "androidx.room:room-runtime:2.2.5"
+-    kapt "androidx.room:room-compiler:2.2.5"
++    implementation "androidx.room:room-runtime:2.4.1"
++    kapt "androidx.room:room-compiler:2.4.1"
+ 
+     // Kotlin Extensions and Coroutines support for Room
+     implementation "androidx.room:room-ktx:2.2.5"
+Index: .idea/compiler.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/compiler.xml b/.idea/compiler.xml
+new file mode 100644
+--- /dev/null	(date 1644142465178)
++++ b/.idea/compiler.xml	(date 1644142465178)
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project version="4">
++  <component name="CompilerConfiguration">
++    <bytecodeTargetLevel target="11" />
++  </component>
++</project>
+\ No newline at end of file
+Index: .idea/misc.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"ProjectRootManager\" version=\"2\" languageLevel=\"JDK_1_8\" project-jdk-name=\"1.8\" project-jdk-type=\"JavaSDK\">\n    <output url=\"file://$PROJECT_DIR$/build/classes\" />\n  </component>\n  <component name=\"ProjectType\">\n    <option name=\"id\" value=\"Android\" />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/misc.xml b/.idea/misc.xml
+--- a/.idea/misc.xml	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/.idea/misc.xml	(date 1644142465170)
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" project-jdk-name="1.8" project-jdk-type="JavaSDK">
++  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" project-jdk-name="1.8" project-jdk-type="JavaSDK">
+     <output url="file://$PROJECT_DIR$/build/classes" />
+   </component>
+   <component name="ProjectType">
+Index: .idea/gradle.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"GradleMigrationSettings\" migrationVersion=\"1\" />\n  <component name=\"GradleSettings\">\n    <option name=\"linkedExternalProjectsSettings\">\n      <GradleProjectSettings>\n        <option name=\"testRunner\" value=\"PLATFORM\" />\n        <option name=\"distributionType\" value=\"DEFAULT_WRAPPED\" />\n        <option name=\"externalProjectPath\" value=\"$PROJECT_DIR$\" />\n        <option name=\"gradleJvm\" value=\"1.8\" />\n        <option name=\"modules\">\n          <set>\n            <option value=\"$PROJECT_DIR$\" />\n            <option value=\"$PROJECT_DIR$/app\" />\n          </set>\n        </option>\n        <option name=\"resolveModulePerSourceSet\" value=\"false\" />\n      </GradleProjectSettings>\n    </option>\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/gradle.xml b/.idea/gradle.xml
+--- a/.idea/gradle.xml	(revision bbad0ff58e375843fce653071be6aff69a25a241)
++++ b/.idea/gradle.xml	(date 1644071478489)
+@@ -4,10 +4,10 @@
+   <component name="GradleSettings">
+     <option name="linkedExternalProjectsSettings">
+       <GradleProjectSettings>
+-        <option name="testRunner" value="PLATFORM" />
++        <option name="testRunner" value="GRADLE" />
+         <option name="distributionType" value="DEFAULT_WRAPPED" />
+         <option name="externalProjectPath" value="$PROJECT_DIR$" />
+-        <option name="gradleJvm" value="1.8" />
++        <option name="gradleJvm" value="Android Studio default JDK" />
+         <option name="modules">
+           <set>
+             <option value="$PROJECT_DIR$" />
